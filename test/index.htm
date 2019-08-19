@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<meta charset="UTF-8">
+<title>Document</title>
+<script src="./ord.js"></script>
+<style>
+html {
+    font-family: 'Courier New', Courier, monospace;
+    background:#fafafa;
+    text-align: center;
+}
+pre {
+    background:#fff;
+}
+div {
+    margin:5px 0;
+}
+label {
+    display: block;
+    font-weight: bold;
+}
+input {
+    font-family: 'Courier New', Courier, monospace;
+}
+
+
+</style>
+<div>
+    <label>Available letters</label>
+    <input id="letters" value="iyäee" />
+</div>
+<div>
+    <label>Number of wildcards</label>
+    <input id="wildcards" type="number" size="2" value="3" />
+</div>
+<div>
+    <label>Pattern</label>
+    <span>/^</span><input id="pattern" value=".*"><span>$/</span>
+    <footer>(Letters in pattern need to be in "available letters")</footer>
+</div>
+<div>
+    <button id="butt">SEARCH</button>
+</div>
+<div>
+    <label>Result</label>
+    <textarea cols="100" rows="10" id="result"></textarea>
+</div>
+<div id="tests"></div>
+
+<script type="module">
+    import Scrabble from '../index.js';
+    const s = new Scrabble(ord);
+    const points = {"A":1,"B":3,"C":8,"D":1,"E":1,"F":3,"G":2,"H":3,"I":1,
+        "J":7,"K":3,"L":2,"M":3,"N":1,"O":2,"P":4,"Q":0,"R":1,"S":1,"T":1,
+        "U":4,"V":3,"W":0,"X":8,"Y":7,"Z":8,"Å":4,"Ä":4,"Ö":4}; 
+
+    var butt = document.getElementById('butt');
+    butt.addEventListener('click', () => {
+        const letters = document.getElementById('letters').value;
+        const pattern = document.getElementById('pattern').value;
+        const wildcards = +document.getElementById('wildcards').value;        
+        const result = document.getElementById('result');
+        result.value = calc(letters, pattern, wildcards, ord) || 'Found 0 results';
+    });
+
+    function calc(letters, pattern, wildcards, dict) {
+        console.log(`Tesing pattern ${pattern} with letters ${letters.split('').join()} using ${wildcards} wildcards and a ${dict.length} word dictionary`);
+        const rxPattern = '^' + pattern.replace(/\*/g, '{0,' + (wildcards + letters.length) + '}') + '$'
+        const rx = new RegExp(rxPattern);
+        return s.getAllByPoints(letters, rx, wildcards, points).map(o => `${o.w}(${o.v})`).join('\t');
+    }
+
+    class Assert {
+        succeded = 0;
+        failed = 0;
+
+        static get total() {
+            return this.succeded + this.failed;
+        }
+
+        constructor(print, printError) {
+            this.print = print || console.log();
+            this.printError = printError || console.log();
+        };
+
+        static init = (name, print, printError) => {
+            this.reset();
+            this.test = name;
+            this.print = print || this.print || console.log;
+            this.printError = printError || this.printError || console.error;
+        };
+
+        static reset = () => {
+            this.succeded = 0;
+            this.failed = 0;
+        };
+
+        static result = () => {
+            this.print(this.test + ' completed ' + this.total + ' tests with ' + this.failed + ' errors');
+        }
+
+        static eq = (a, b) => {
+            if(a === b) {
+                ++this.succeded;                
+            } else {
+                ++this.failed;
+                this.printError('expected ' + a + ' to be equal to ' + b + ' ' + this.getStackTrace());
+            }
+        };
+
+        static getStackTrace = () => {
+            const stackMatch = (new Error).stack.match(/at.*/g);
+            return stackMatch && stackMatch[2] || '';
+        }
+
+    };
+    const testElement = document.getElementById('tests')
+    const output = (msg) => { testElement.innerHTML += '<div><pre>' + msg + '</pre></div>'; };
+    //Assert.init('set_standard_put', output);
+
+    const debugAll = false;
+
+    (function test_only_alfa(){
+        Assert.init('test_only_alfa');
+        const debug = debugAll || false;
+        const dict = ['a','ab','abc','abcd','aba','abba','abbac',];
+        const tests = [
+            {letters:'a', matches: 1},
+            {letters:'ab', matches: 2},
+            {letters:'ba', matches: 2},
+            {letters:'abb', matches: 2},
+            {letters:'aabbaa', matches: 4},
+            {letters:'abc', matches: 3}
+        ];
+
+        for(const test of tests) {
+            const s = new Scrabble(dict);
+            const result = s.getAll(test.letters);
+            Assert.eq(result.length, test.matches);
+            if(debug) console.log(test.letters, result, `Got ${result.length}, Expected ${test.matches}`); 
+        }
+        
+        Assert.result();
+    })();
+
+    (function test_wildcards(){
+        Assert.init('test_wildcards');
+        const debug = debugAll || false;
+        const dict = ['a','ab','abc','abcd','aba','abba','abbac',];
+        const tests = [
+            {letters:'a', wildcards: 1, matches: 2},
+            {letters:'ab', wildcards: 1, matches: 4},
+            {letters:'ba', wildcards: 2, matches: 6},
+            {letters:'abb', wildcards: 1, matches: 5},
+            {letters:'aabbaa', wildcards: 1, matches: 6},
+            {letters:'abc', wildcards: 0, matches: 3},
+            {letters: 'efg', wildcards: 3,matches: 4}
+        ];
+
+        for(const test of tests) {
+            const s = new Scrabble(dict);
+            const result = s.getAll(test.letters, null, test.wildcards);
+            Assert.eq(result.length, test.matches);
+            if(debug) console.log(test.letters, test.wildcards ,result, `Got ${result.length}, Expected ${test.matches}`);  
+        }
+        
+        Assert.result();
+    })();
+
+    (function test_pattern(){
+        Assert.init('test_pattern');
+        const debug = debugAll || false;
+        const dict = ['a','b','ab','abc','abcd','aba','abba','abbac',];
+        const tests = [
+            {letters:'a', pattern: /^.$/, wildcards: 0, matches: 1},
+            {letters:'ab', pattern: /^..$/, wildcards: 0, matches: 1},
+            {letters:'ba', pattern: /^a.*$/, wildcards: 0, matches: 2},
+            {letters:'ba', pattern: /^a.*$/, wildcards: 1, matches: 4},
+            {letters:'abb', pattern: /^.+c$/, wildcards: 2, matches: 2},
+            {letters:'aabbaa', pattern: /^.$/, wildcards: 0, matches: 2},
+            {letters:'abc', pattern: /^.+[cd]{1,2}$/, wildcards: 1, matches: 2},
+        ];
+
+        for(const test of tests) {
+            const s = new Scrabble(dict);
+            const result = s.getAll(test.letters, test.pattern, test.wildcards);
+            Assert.eq(result.length, test.matches);
+            if(debug) console.log(test.letters, test.pattern, test.wildcards, result, `Got ${result.length}, Expected ${test.matches}`);  
+        }
+        
+        Assert.result();
+    })();
+
+</script>
